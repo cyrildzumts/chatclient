@@ -38,7 +38,8 @@ void Client::init()
 
     port = SERVER_PORT;
     // getaddrinfo() to get a list of usable addresses
-    std::string host = "localhost";
+    //std::string host = "localhost";
+    std::string host = SERVER_IP;
     char service[NI_MAXSERV];
     memset(&hints, 0, sizeof(struct addrinfo));
     hints.ai_canonname = nullptr;

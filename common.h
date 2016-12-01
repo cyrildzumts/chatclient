@@ -26,7 +26,9 @@
 #include <functional>
 
 
-#define SERVER_PORT "50000"
+//#define SERVER_PORT "50000"
+#define SERVER_PORT "9012"
+#define SERVER_IP "141.22.27.107"
 #define BACKLOG 50
 #define SOCKET_ERROR -1
 #define BUFFER_SIZE 1024

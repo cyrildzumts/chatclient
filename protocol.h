@@ -39,10 +39,11 @@ typedef uint8_t Byte;
  */
 struct Header
 {
-    Byte length;
-    Byte version;
-    Byte flags;
+
     Byte type;
+    Byte flags;
+    Byte version;
+    Byte length;
 };
 union flat_header
 {
