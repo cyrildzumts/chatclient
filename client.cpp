@@ -11,9 +11,6 @@ Client::Client(): quit{false},loggedIn{false}, socket_fd{-1}
                 (
                      " Usage : type in the message you want to send\n"
                      " and validate your action with the Enter key.\n"
-                     " To log in, please enter /login + your username\n"
-                     " Please notice that the username must be maximal\n"
-                     " 16 character long.\n"
                      " To logout  please enter /logout and validate with \n"
                      " with Enter key."
                      " To see the list of available users to chat with, please \n"
@@ -111,7 +108,8 @@ int Client::login()
     while(username_invalid && !loggedIn)
     {
         Logger::log( " enter a username : ");
-        std::cin >> username;
+        std::getline(std::cin, username, '\n');
+        //std::cin >> username;
         if(username.size() > STR_LEN)
         {
             Logger::log("\n username too long ");
@@ -127,14 +125,9 @@ int Client::login()
             Logger::log("username : " + username);
             log = create_loginout(username);
             void *data = Serialization::Serialize<LogInOut>::serialize(log);
-            int len = log.header.length + sizeof(Header) + username.size();
-            ret = send_data(data, len);
-            if(ret < 0)
-            {
-                Logger::log("Connexion error with server");
-                exit(EXIT_FAILURE);
-            }
-            Logger::log("Client : login sent ..");
+            int len = STR_LEN + sizeof(Header);
+            send_data(data, len);
+            Logger::log("login sent ..");
             //std::this_thread::sleep_for(std::chrono::milliseconds(200));
             ret = read(socket_fd, data, len);
             if(ret < 0)
@@ -182,13 +175,17 @@ void Client::start(bool testMode)
 
 }
 
-int Client::send_data(void *data, int size)
+void Client::send_data(void *data, int size)
 {
-    print_raw_data((char*)data, size);
-    std::pair<void*, int> entry;
-    entry.first = data;
-    entry.second = size;
-    txd_data.push(entry);
+    if((data != nullptr) && (size > 0))
+    {
+        print_raw_data((char*)data, size);
+        std::pair<void*, int> entry;
+        entry.first = data;
+        entry.second = size;
+        txd_data.push(entry);
+    }
+
 }
 
 int Client::decode(void *data, int size)
@@ -249,7 +246,8 @@ void Client::shell()
     LogInOut loginout;
     std::string receiver = "Jacob";
     int count = 0;
-    std::string line = "";
+    std::string line;
+    std::string cmd;
     Message msg;
     char *ptr = nullptr;
     char buffer[BUFFER_SIZE] = {0};
@@ -260,33 +258,53 @@ void Client::shell()
     {
 
         Logger::log(username + " : " + line);
-
-        //std::cin.ignore();
-        std::cin.clear();
-        std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-        std::getline(std::cin,line);
-        Logger::log("input : " + line);
-        if(line == "/quit" )
+        std::cout << std::flush;
+        std::getline(std::cin,line, '\n');
+        if(line == "/quit" || line == "/logout" )
         {
             loginout = create_loginout(username, false);
             ptr = (char*)Serialization::Serialize<LogInOut>::serialize(loginout);
             size = sizeof(Header) + STR_LEN;
             break;
         }
-        if(line == "/GET")
+        else if(line == "/GET" || line == "/info" || line == "/users")
         {
             info = create_controlInfo(
                         std::vector<std::string>());
-            ptr = (char*)Serialization::Serialize<ControlInfo>::serialize(info);
+
+            ptr = (char*)Serialization::Serialize<ControlInfo>::serialize(
+                        info);
             size = sizeof(Header)
                     + (info.header.length * sizeof(Entry));
         }
-        else
+        else if((line == "/help") ||  (line == "--h"))
         {
+            Logger::log(usage);
+        }
+        else
+        {   std::vector<std::string> args = Tools::input_arg_reader(line);
+            Logger::log("Lines entered : ");
+            for(auto str : args)
+            {
+                std::cout << str << std::endl;
+            }
+            Logger::log( "Lines entered end");
             Logger::log("message entered");
-            msg = create_message(username,receiver,line.c_str(), line.size());
-            ptr = (char*)Serialization::Serialize<Message>::serialize(msg);
-            size = (2 * STR_LEN) + line.size() + sizeof(Header);
+            if(!args.empty())
+            {
+                receiver = args.at(0);
+                line = args.at(1);
+                msg = create_message(username,receiver,line.c_str(), line.size());
+                ptr = (char*)Serialization::Serialize<Message>::serialize(msg);
+                size = (2 * STR_LEN) + line.size() + sizeof(Header);
+            }
+            else
+            {
+                ptr = nullptr;
+                Logger::log("Bad input formating. please see the usage text"
+                            " by entering /help");
+            }
+
         }
 
         send_data(ptr, size);

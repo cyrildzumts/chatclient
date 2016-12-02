@@ -7,6 +7,7 @@
 #include <fstream>
 #include <limits>
 #include "queue.h"
+#include "inputargreader.h"
 
 class Client
 {
@@ -41,7 +42,7 @@ public:
      * @return : 0 --> success
      *          -1 --> Error ( connexion to the server were lost)
      */
-    int send_data(void *data, int size);
+    void send_data(void *data, int size);
     /**
      * @brief login prompts the user to enter a username and try to register
      * the client to the server.
