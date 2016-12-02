@@ -3,10 +3,16 @@
 Client::Client(const std::string &server_ip, const std::string &port)
 {
     Logger::log("Not implemented yet");
+    quit =false;
+    loggedIn =false;
+    socket_fd =-1;
 }
 
-Client::Client(): quit{false},loggedIn{false}, socket_fd{-1}
+Client::Client()
 {
+    quit =false;
+    loggedIn =false;
+    socket_fd =-1;
     usage =std::string
                 (
                      " Usage : type in the message you want to send\n"
@@ -27,6 +33,7 @@ Client::Client(): quit{false},loggedIn{false}, socket_fd{-1}
 
 void Client::init()
 {
+    Logger::log("Client initialization ...");
     if(signal(SIGPIPE, SIG_IGN) == SIG_ERR)
     {
         std::cerr << "signal" << std::endl;
@@ -35,9 +42,7 @@ void Client::init()
 
     port = SERVER_PORT;
     // getaddrinfo() to get a list of usable addresses
-    //std::string host = "localhost";
     std::string host = SERVER_IP;
-    char service[NI_MAXSERV];
     memset(&hints, 0, sizeof(struct addrinfo));
     hints.ai_canonname = nullptr;
     hints.ai_addr = nullptr;
@@ -56,10 +61,12 @@ void Client::init()
         perror("getaddrinfo()");
         std::exit(EXIT_FAILURE);
     }
+    Logger::log("Client initialization ... done");
 }
 
 int Client::create_socket()
 {
+    Logger::log("socket creation  ...");
     addrinfo *rp;
     for( rp = result; rp != nullptr; rp = rp->ai_next)
     {
@@ -69,10 +76,12 @@ int Client::create_socket()
             // on error we try the next address
             continue;
         }
+        Logger::log("socket created  ...");
         if(connect(socket_fd,
                    rp->ai_addr,
                    rp->ai_addrlen) != SOCKET_ERROR)
         {
+            Logger::log("connexion etablished ...");
             break; // success
         }
         close(socket_fd);
@@ -81,6 +90,7 @@ int Client::create_socket()
     {
         std::cerr << "Fatal Error : couldn't find a suitable address" << std::endl;
         socket_fd = SOCKET_ERROR;
+        exit(EXIT_FAILURE);
     }
 
     freeaddrinfo(rp);
@@ -97,8 +107,8 @@ void Client::logout()
 
 int Client::login()
 {
+    Logger::log("Please enter a login to register to the server");
     bool username_invalid = true;
-    //std::string username = "cyrildz";
     std::string username;
     Logger::log(head);
     Logger::log(usage);
@@ -107,9 +117,9 @@ int Client::login()
     LogInOut log;
     while(username_invalid && !loggedIn)
     {
-        Logger::log( " enter a username : ");
+        Logger::log( "username : ");
+        std::cout << std::flush;
         std::getline(std::cin, username, '\n');
-        //std::cin >> username;
         if(username.size() > STR_LEN)
         {
             Logger::log("\n username too long ");
@@ -122,12 +132,10 @@ int Client::login()
         }
         else
         {
-            Logger::log("username : " + username);
             log = create_loginout(username);
             void *data = Serialization::Serialize<LogInOut>::serialize(log);
             int len = STR_LEN + sizeof(Header);
             send_data(data, len);
-            Logger::log("login sent ..");
             //std::this_thread::sleep_for(std::chrono::milliseconds(200));
             ret = read(socket_fd, data, len);
             if(ret < 0)
@@ -138,12 +146,11 @@ int Client::login()
 
             if(ret > 1)
             {
-                Logger::log("Client : login received ..");
                 decode(data, ret);
             }
             if(ret == 1)
             {
-                Logger::log("Client received heartbeat signal ...");
+                //Logger::log("Client received heartbeat signal ...");
             }
 
             if(loggedIn)
@@ -155,6 +162,7 @@ int Client::login()
         }
 
     }
+    return ret;
 }
 
 void Client::start(bool testMode)
@@ -191,14 +199,13 @@ void Client::send_data(void *data, int size)
 int Client::decode(void *data, int size)
 {
 
-    Logger::log("Client decoding...");
     int ret = -1;
     char *ptr = (char*)data;
     LogInOut log;
     Message msg;
-    flat_header header;
-    memcpy(&header.value, ptr, sizeof(Header));
-    switch(header.header.type)
+    Header header;
+    memcpy(&header, ptr, sizeof(Header));
+    switch(header.type)
     {
       case LOGINOUT:
         log = Serialization::Serialize<LogInOut>::deserialize(data);
@@ -213,11 +220,11 @@ int Client::decode(void *data, int size)
     }
     ptr = nullptr;
     memset(data, 0, size);
+    return ret;
 }
 
 void Client::print_raw_data(char *data, int size) const
 {
-    Logger::log("Printing raw data");
     std::ofstream file;
     file.open("raw_data.log", std::ios::app);
 
@@ -244,23 +251,20 @@ void Client::shell()
     r_worker.detach();
     ControlInfo info;
     LogInOut loginout;
-    std::string receiver = "Jacob";
-    int count = 0;
+    std::string receiver;
     std::string line;
-    std::string cmd;
     Message msg;
     char *ptr = nullptr;
-    char buffer[BUFFER_SIZE] = {0};
     int size = 0;
 
     std::cin.tie(&std::cout);
     while(!quit)
     {
 
-        Logger::log(username + " : " + line);
+        Logger::log(username + " : " );
         std::cout << std::flush;
         std::getline(std::cin,line, '\n');
-        if(line == "/quit" || line == "/logout" )
+        if( (line == "/quit") || (line == "/logout") )
         {
             loginout = create_loginout(username, false);
             ptr = (char*)Serialization::Serialize<LogInOut>::serialize(loginout);
@@ -282,19 +286,14 @@ void Client::shell()
             Logger::log(usage);
         }
         else
-        {   std::vector<std::string> args = Tools::input_arg_reader(line);
-            Logger::log("Lines entered : ");
-            for(auto str : args)
-            {
-                std::cout << str << std::endl;
-            }
-            Logger::log( "Lines entered end");
-            Logger::log("message entered");
+        {
+            std::vector<std::string> args = Tools::input_arg_reader(line);
             if(!args.empty())
             {
                 receiver = args.at(0);
                 line = args.at(1);
-                msg = create_message(username,receiver,line.c_str(), line.size());
+                msg = create_message(username,receiver,
+                                     line.c_str(), line.size());
                 ptr = (char*)Serialization::Serialize<Message>::serialize(msg);
                 size = (2 * STR_LEN) + line.size() + sizeof(Header);
             }
@@ -304,7 +303,6 @@ void Client::shell()
                 Logger::log("Bad input formating. please see the usage text"
                             " by entering /help");
             }
-
         }
 
         send_data(ptr, size);
@@ -332,6 +330,7 @@ int Client::process_loginout(const LogInOut &log)
     {
         Logger::log("you successfuly logged out");
         quit = true;
+        loggedIn = false;
         ret = 0;
     }
 
@@ -345,6 +344,7 @@ int Client::process_message(const Message &msg)
             + " : "
             + std::string(msg.data);
     Logger::log(str);
+    return 0;
 }
 
 int Client::process_get_request(void *data)
@@ -358,6 +358,7 @@ int Client::process_get_request(void *data)
         userlist.push_back(user);
     }
     show_userlist();
+    return 0;
 }
 
 void Client::send_test()
@@ -392,7 +393,9 @@ void Client::send_test()
 
 void Client::show_userlist() const
 {
-    Logger::log("Available Users : ");
+    Logger::log("There are "
+                + std::to_string(userlist.size())
+                + " Available Users : ");
     for(std::string user : userlist)
     {
         Logger::log("* " + user);
@@ -415,11 +418,10 @@ void Client::read_task()
         }
         else if(count == 1)
         {
-            Logger::log("heartbeat signal received ...");
+            //Logger::log("heartbeat signal received ...");
         }
         else if(count > 1)
         {
-            Logger::log("new data received ...");
             ptr = new char[count];
             memcpy(ptr, buffer, count);
             decode(ptr, count);
@@ -435,13 +437,11 @@ void Client::write_task()
     while(!quit)
     {
         txd_data.wait_and_pop(entry);
-        Logger::log("new data to sent ...");
         if(write(socket_fd, entry.first, entry.second) < 0)
         {
             perror("Write Task: ");
             quit = true;
             break;
         }
-        Logger::log("new data sent to server ...");
     }
 }

@@ -1,11 +1,11 @@
 #ifndef CLIENT_H
 #define CLIENT_H
 
+#include <fstream>
+#include <limits>
 #include "common.h"
 #include "logger.h"
 #include "serialization.h"
-#include <fstream>
-#include <limits>
 #include "queue.h"
 #include "inputargreader.h"
 
@@ -104,6 +104,7 @@ private:
     int process_get_request(void *data);
     void send_test();
     void show_userlist()const;
+
 private:
 
     int socket_fd;
@@ -120,8 +121,6 @@ private:
     std::string head;
     Utils::Queue<std::pair<void*, int>> txd_data;
     std::vector<std::string> userlist;
-
-
 };
 
 #endif // CLIENT_H
